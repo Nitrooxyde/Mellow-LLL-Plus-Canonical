@@ -93,6 +93,8 @@ class LLLBuffer:
                       'last_event': '', 'filament': {}}
         self._prev_error = 0
         self._query_busy = False
+        self._probe_events = None    # liste des events EV_ARM collectés pendant
+                                     # LLL_DETECT_LOADED (None = hors sonde)
         self.mcu.register_config_callback(self._build_config)
         self.poll_timer = self.reactor.register_timer(self._poll)
         self.printer.add_object('lll_buffer ' + self.name, self)
@@ -357,6 +359,8 @@ class LLLBuffer:
     def _process_event(self, ev, a):
         name = EVENTS.get(ev, str(ev))
         self.state['last_event'] = '%s:%d' % (name, a)
+        if ev == 5 and self._probe_events is not None:   # EV_ARM pendant la sonde
+            self._probe_events.append(a)
         if ev == 0:
             self.gcode.respond_info(
                 "LLL %s: ecode=%s%s" % (self.name, ECODES.get(a, a),
@@ -663,16 +667,27 @@ class LLLBuffer:
         if expected and expected not in [o.name for o in lanes]:
             raise gcmd.error("LLL probe: lane EXPECTED '%s' inconnue"
                              % expected)
-        arms0, saved_roles = {}, {}
+        arms0, saved_roles, saved_masks = {}, {}, {}
         gm_abs = self.printer.lookup_object('gcode_move').get_status(
             eventtime)['absolute_extrude']
-        changed = []
+        changed, moved = [], []
+        sv = self.printer.lookup_object('save_variables', None)
         try:
             for o in lanes:
                 arm, role = o.probe_arm()
                 arms0[o.name] = arm
                 saved_roles[o.name] = role
                 o.role_cmd.send([2])     # standby : personne ne compense
+                # masque télémétrie : ajoute EV_ARM (bit 5) le temps de la sonde
+                prev = 0x0F
+                if sv is not None:
+                    prev = int(dict(sv.allVariables.get(o._saved_var(), {}))
+                               .get('param_event_mask', 0x0F))
+                saved_masks[o.name] = prev
+                pm = o.param_cmd.send([9, 0, prev | 0x20])
+                logging.info("lll probe: %s event_mask %d -> %s", o.name,
+                             prev | 0x20, pm)
+                o._probe_events = []
             self.gcode.run_script_from_command(
                 "M83\nG1 E-%.1f F300\nM400" % (mm,))
             self.reactor.pause(self.reactor.monotonic() + 0.6)
@@ -680,16 +695,33 @@ class LLLBuffer:
                 arm, _ = o.probe_arm()
                 if arm != arms0[o.name]:
                     changed.append(o.name)
+                if o._probe_events:      # le bras a traversé >= 1 capteur
+                    moved.append(o.name)  # pendant le mouvement, même brièvement
             self.gcode.run_script_from_command(
                 "G1 E%.1f F300\nM400%s" % (mm, "\nM82" if gm_abs else ""))
         finally:
-            for o in lanes:              # restaure les rôles quoi qu'il arrive
+            for o in lanes:              # restaure rôles + masques quoi qu'il arrive
+                o._probe_events = None
+                if o.name in saved_masks:
+                    try:
+                        o.param_cmd.send([9, 0, saved_masks[o.name]])
+                    except Exception:
+                        logging.exception("lll probe: mask restore %s failed",
+                                          o.name)
                 if o.name in saved_roles:
                     try:
                         o.role_cmd.send([saved_roles[o.name]])
                     except Exception:
                         logging.exception("lll probe: role restore %s failed",
                                           o.name)
+        # verdict : d'abord les événements bras (transitions vues pendant le
+        # retract), sinon repli sur la comparaison d'état avant/après
+        if len(moved) == 1:
+            changed = moved
+        elif not moved and len(changed) != 1:
+            pass                         # ni événement ni état : échec ci-dessous
+        elif len(moved) > 1:
+            changed = moved
         if len(changed) == 1:
             loaded = changed[0]
             lane_obj = [o for o in lanes if o.name == loaded][0]
