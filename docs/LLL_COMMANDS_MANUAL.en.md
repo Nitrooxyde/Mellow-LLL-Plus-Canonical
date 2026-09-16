@@ -255,12 +255,13 @@ LLL_FILAMENT LANE=lll2 TYPE=ASA COLOR=rouge TEMP=265
 
 ### `LLL_DETECT_LOADED [MM=10] [EXPECTED=<lane>] [ON_MISMATCH=warn|pause|error]`
 **Detects which lane is PHYSICALLY engaged in the extruder** — with no additional sensor: all lanes briefly switch to standby, small extruder retract (`MM`, default 10 mm), **only the engaged lane's arm moves** (its position sensors give it away), clean net-zero re-push, roles restored.
+- Since v1.0.3 the verdict comes from the **arm events** (`EV_ARM`) the firmware reports **while** the extruder retracts — the probe temporarily adds the arm bit to each lane's telemetry mask and counts the transitions per lane, so a sensor crossed and released during the move still counts. The before/after arm-state comparison remains as a fallback.
 - ⚠️ **Requires a hot extruder** (≥ `min_extrude_temp`, 170 °C): when cold, Klipper blocks the E movement and the filament is frozen in the nozzle (guaranteed slip) → the command refuses with a clear message.
 - `EXPECTED=` + `ON_MISMATCH=pause`: if the detected lane is not the expected one → **PAUSE** + instruction message (load the correct lane, re-check, `RESUME`).
 - `ON_MISMATCH=error`: same but as a **G-code error** — aborts the queue and the rest of the calling macro. Required to gate a purge line from inside a start/resume macro: a `PAUSE` does not stop macro expansion (the purge would still run with the wrong filament).
 - Inconclusive verdict (no arm / several arms) → reported honestly, never a false positive.
 - The detected lane is remembered (`lll_loaded_lane` in save_variables).
-- `MM` must be calibrated for your geometry: the arm must change zone decisively.
+- `MM` must be calibrated for your geometry: the arm must cross at least one sensor during the retract (with the event-based verdict it no longer has to *end* in a different zone).
 
 ### Automatic check at print start (opt-in)
 ```

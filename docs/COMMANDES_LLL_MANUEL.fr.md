@@ -255,12 +255,13 @@ LLL_FILAMENT LANE=lll2 TYPE=ASA COLOR=rouge TEMP=265
 
 ### `LLL_DETECT_LOADED [MM=10] [EXPECTED=<lane>] [ON_MISMATCH=warn|pause|error]`
 **Détecte quelle lane est PHYSIQUEMENT engagée dans l'extrudeur** — sans aucun capteur supplémentaire : toutes les lanes passent brièvement en standby, petit retract extrudeur (`MM`, déf. 10 mm), **seul le bras de la lane engagée bouge** (ses capteurs de position le trahissent), re-push net zéro, rôles restaurés.
+- Depuis la v1.0.3 le verdict vient des **événements de bras** (`EV_ARM`) que le firmware remonte **pendant** le retract — la sonde ajoute temporairement le bit « bras » au masque de télémétrie de chaque lane et compte les transitions par lane : un capteur traversé puis relâché pendant le mouvement compte quand même. La comparaison d'état avant/après reste en repli.
 - ⚠️ **Exige un extrudeur chaud** (≥ `min_extrude_temp`, 170 °C) : à froid, Klipper bloque le mouvement E et le filament est figé dans la buse (slip garanti) → la commande refuse avec un message clair.
 - `EXPECTED=` + `ON_MISMATCH=pause` : si la lane détectée n'est pas celle attendue → **PAUSE** + message d'instructions (charger la bonne lane, re-vérifier, `RESUME`).
 - `ON_MISMATCH=error` : idem mais en **erreur G-code** — avorte la file et le reste de la macro appelante. Indispensable pour gater une purge depuis l'intérieur d'une macro start/resume : un `PAUSE` n'arrête pas l'expansion de la macro (la purge s'exécuterait quand même avec le mauvais filament).
 - Verdict non concluant (aucun/plusieurs bras) → signalé honnêtement, jamais de faux positif.
 - La lane détectée est mémorisée (`lll_loaded_lane` dans save_variables).
-- `MM` est à calibrer sur votre géométrie : il faut que le bras change de zone de façon franche.
+- `MM` est à calibrer sur votre géométrie : il faut que le bras traverse au moins un capteur pendant le retract (avec le verdict par événements, il n'a plus besoin de *finir* dans une autre zone).
 
 ### Vérification automatique au démarrage du print (opt-in)
 ```

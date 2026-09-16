@@ -1,5 +1,31 @@
 # Changelog
 
+## v1.0.3 — `LLL_DETECT_LOADED` reads the arm events during the retract — 2026-09-16
+
+Host-side only (Klipper extra `lll_buffer.py`): **no firmware rebuild or flash needed** — keep running the v1.0.0 binary.
+
+### Fixed
+- `LLL_DETECT_LOADED` false negatives ("aucun bras n'a bougé" while the buffer arm visibly
+  moved). The probe used to compare the arm's hall state **before** and **after** the
+  retract, with a single snapshot 0.6 s after `M400`: a sensor crossing that happened
+  *during* the move was invisible, and a lane whose arm already rested on the Back side
+  (buffer full of slack, typically right after a load or a `LLL_JOG` forward) returned the
+  same state before and after. The firmware already emits an `EV_ARM` event on every hall
+  transition, but the default telemetry mask (`0x0F`) drops it and the probe never listened.
+- Now the probe enables `EV_ARM` on every lane for the duration of the retract (telemetry
+  mask `| 0x20`, previous value restored afterwards), **counts the arm events per lane while
+  the extruder retracts**, and takes the lane that moved. The before/after state comparison
+  stays as a fallback when no event arrives. Roles and masks are restored in a `finally`
+  block whatever happens. Diagnosed with 50 ms sampling on the reference printer (events
+  `arm:2→3→1→2→3` seen from 9 mm of retract on the loaded lane, none on the empty one) and
+  validated on a real print start the same day. No extra extrusion is added and `MM` keeps
+  its meaning.
+
+### Note
+- A Klipper `RESTART` does **not** reload a modified Python extra (the `Printer` object is
+  recreated inside the same process): after updating `lll_buffer.py`, run
+  `sudo systemctl restart klipper` with the printer idle.
+
 ## v1.0.2 — Feed-gate on lane selection + dashboard unfreeze/check — 2026-07-12
 
 Host-side only (example macros + dashboard): **no firmware rebuild or flash needed**.
