@@ -22,6 +22,17 @@ Connecting USB before the 24 V at power-up gives the same result.
 a `FIRMWARE_RESTART` before moving filament; at power-up, have the 24 V present
 before USB, or together with it.
 
+## Why this fix exists
+
+This did not start as a theory. The supply throttling itself is something I had
+noticed on my own printer for a long time: after a power interruption, the 24 V
+supply of the buffers went into current limit and the motors crawled. I had worked
+out that a firmware restart was enough to get out of it, and I lived with that.
+
+Then one day I forgot that detail, and lost a lot of time looking for the cause
+everywhere else. The fix was written after that: the firmware should not depend
+on someone remembering to restart it.
+
 ## What changes
 
 - **Fix #10** — before every motor start (forward or back), the complete driver
