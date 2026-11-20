@@ -412,6 +412,14 @@ Two honest notes:
 - **Deliberate standalone trade-off, not Mellow parity**: a board that is *never* host-driven starts auto-feeding 20 s after power-on, where Mellow's stock standalone firmware starts ~1 s after boot. That one-time latency is the price of closing the post-reset push.
 - `role: parked` in printer.cfg remains recommended as a complementary layer (it also covers the case of a Klipper host that stays down longer than 20 s with a tensioned arm).
 
+### Kalico and other Klipper derivatives (untested)
+
+This project is developed and tested on **mainline Klipper only**. It has never been run on Kalico or on any other Klipper derivative.
+
+- **Why it can stop at startup.** The host module `lll_buffer.py` calls Klipper's internal Python API, and a derivative does not always follow mainline's changes to it. Known case ([issue #2](../../issues/2)): mainline Klipper renamed `mcu.register_response()` to `mcu.register_serial_response()` in March 2026 and Kalico kept the old name, so up to v1.0.3 the host halts at connect with `Internal error during connect: 'MCU' object has no attribute 'register_serial_response'`. A mainline Klipper older than March 2026 stops the same way.
+- **What to try.** Take `klippy/extras/lll_buffer.py` from **v1.0.4 or later** (it uses whichever of the two names the host provides), copy it over the one in your host's `klippy/extras/` (Step 5), then restart the Klipper service itself — a plain `RESTART` does not reload a modified extra. If the host then stops on another `... has no attribute ...` error, it is probably the same kind of difference elsewhere in the module: the name in the message and the traceback in `klippy.log` point to the line.
+- **Feedback wanted.** The v1.0.4 change was written from Kalico's sources; it has not been run on a Kalico machine. If you run this project on Kalico or another derivative, please tell us how it went with a [🧪 field test report](../../issues/new?template=test_report.yml) — working or not, with the host version and the exact error text if there is one. That is what will tell whether this is sorted out.
+
 ---
 
 ## Field validation status
@@ -419,6 +427,7 @@ Two honest notes:
 Honest scope of what has been tested:
 
 - **One reference setup**: a single printer, **two LLL Plus boards** (two lanes), STM32F072CB.
+- **Host software: mainline Klipper only** (`v0.13.0-700`, commit `d6ea62542`, on the reference printer). Kalico and other Klipper derivatives have never been run — see [Kalico and other Klipper derivatives](#kalico-and-other-klipper-derivatives-untested).
 - The shipped binary has been running **in production** on both boards since its build date, through **multiple real multi-day prints including filament color changes**.
 - **Bench-tested module by module**: roles, modes, enables, bounded jog/run, error latch/clear, IOEXT gating, telemetry events, profile persistence, and the `M112` shutdown kill.
 - **Not exercised on this setup** (no hardware/wiring to trigger them): mainboard signal control (PB5/PB6) beyond bench checks, and non-default IOEXT wiring on the spare headers.

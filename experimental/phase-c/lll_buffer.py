@@ -172,8 +172,17 @@ class LLLBuffer:
         self.io_read_cmd = mcu.lookup_query_command(
             "lll_io_read ch=%c",
             "lll_io ch=%c val=%u ok=%c", cq=cq)
-        self.mcu.register_serial_response(self._handle_event,
-                                          "lll_event ev=%c a=%u")
+        # Deux API hôte selon la version (issue #2) :
+        #  - Klipper mainline >= 2026-03-05 (commit c89393cd) :
+        #    register_serial_response(cb, FORMAT complet du message)
+        #  - Kalico et Klipper antérieurs : register_response(cb, NOM seul) -
+        #    le nom EST la clé de dispatch ; y passer le format complet
+        #    démarre sans erreur mais ne reçoit plus aucun événement.
+        if hasattr(self.mcu, 'register_serial_response'):
+            self.mcu.register_serial_response(self._handle_event,
+                                              "lll_event ev=%c a=%u")
+        else:
+            self.mcu.register_response(self._handle_event, "lll_event")
         # replay des options statiques dans la séquence config (fix #7)
         if self.cfg_role != 'active':
             self.mcu.add_config_cmd("lll_role role=%d" % ROLES[self.cfg_role])

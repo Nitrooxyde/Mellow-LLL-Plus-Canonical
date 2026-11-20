@@ -1,5 +1,42 @@
 # Changelog
 
+## v1.0.4 — `lll_buffer.py` loads on Kalico and on older Klipper hosts — 2026-11-20
+
+Host-side only (Klipper extra `lll_buffer.py`): **no firmware rebuild or flash needed** — keep running the v1.0.0 binary.
+
+### Fixed
+- The host halted at connect with `Internal error during connect: 'MCU' object has no
+  attribute 'register_serial_response'` on **Kalico**, and on any mainline Klipper older than
+  March 2026 ([issue #2](https://github.com/Nitrooxyde/Mellow-LLL-Plus-Canonical/issues/2),
+  reported by ellioteb). Mainline Klipper renamed `mcu.register_response()` to
+  `mcu.register_serial_response()` (Klipper commit `c89393cd`); the extra only knew the new
+  name and Kalico still has the old one.
+- The extra now uses whichever of the two the host provides. They do not take the same
+  argument: the new one takes the full message format (`"lll_event ev=%c a=%u"`), the old one
+  the bare message name (`"lll_event"`), which is its dispatch key. Renaming the method alone
+  therefore starts the host but silently drops every `lll_event` (console messages on error /
+  error cleared / DIAG, `event_gcode`, the arm events used by `LLL_DETECT_LOADED`).
+- Same change applied to `experimental/phase-c/lll_buffer.py`.
+
+### What was verified, and what was not
+- **Kalico**: written from its sources (`klippy/mcu.py`, `klippy/serialhdl.py`,
+  `klippy/msgproto.py`) and checked with a test that mimics both API shapes. **Not run on a
+  Kalico machine**, and the rest of the module remains untested there.
+- **Mainline Klipper**: the call made is the same one as in v1.0.3.
+- **Not yet deployed on the reference printer**: unlike the previous releases, this file is
+  published before running there, so for `lll_buffer.py` the byte-for-byte identity with the
+  deployed code does not hold at release time.
+
+### Feedback wanted
+- This project is tested on mainline Klipper only. If you run it on Kalico or another Klipper
+  derivative, a [field test report](https://github.com/Nitrooxyde/Mellow-LLL-Plus-Canonical/issues/new?template=test_report.yml)
+  — working or not, with the host version and the exact error text if any — is what will tell
+  whether this is sorted out. See the README, *Kalico and other Klipper derivatives*.
+
+### Note
+- A Klipper `RESTART` does **not** reload a modified Python extra: after updating
+  `lll_buffer.py`, restart the Klipper service itself with the printer idle.
+
 ## v1.0.3 — `LLL_DETECT_LOADED` reads the arm events during the retract — 2026-09-16
 
 Host-side only (Klipper extra `lll_buffer.py`): **no firmware rebuild or flash needed** — keep running the v1.0.0 binary.
