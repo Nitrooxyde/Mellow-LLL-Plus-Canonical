@@ -420,6 +420,13 @@ This project is developed and tested on **mainline Klipper only**. It has never 
 - **What to try.** Take `klippy/extras/lll_buffer.py` from **v1.0.4 or later** (it uses whichever of the two names the host provides), copy it over the one in your host's `klippy/extras/` (Step 5), then restart the Klipper service itself — a plain `RESTART` does not reload a modified extra. If the host then stops on another `... has no attribute ...` error, it is probably the same kind of difference elsewhere in the module: the name in the message and the traceback in `klippy.log` point to the line.
 - **Feedback wanted.** The v1.0.4 change was written from Kalico's sources; it has not been run on a Kalico machine. If you run this project on Kalico or another derivative, please tell us how it went with a [🧪 field test report](../../issues/new?template=test_report.yml) — working or not, with the host version and the exact error text if there is one. That is what will tell whether this is sorted out.
 
+### Driver settings lost after a 24 V interruption while USB stays connected
+
+The motor driver (TMC2225) is powered from the 24 V input, the MCU stays alive on USB, and this firmware writes the driver configuration only once after boot. If the 24 V goes away and comes back while USB stays connected — or if USB is connected before the 24 V at power-up — the driver runs on its power-on settings: the motor turns slowly, has no torque, draws more current, and the 24 V supply can go into current limit.
+
+- **Workaround:** after any interruption of the 24 V, do a `FIRMWARE_RESTART` before moving filament; at power-up, have the 24 V present before USB, or together with it.
+- **Fix:** a candidate firmware that rewrites the driver configuration before every motor start is in **[experimental/fix10-fix11/](experimental/fix10-fix11/README.md)**. It is not the official binary yet: read its status before flashing it.
+
 ---
 
 ## Field validation status
@@ -444,6 +451,10 @@ Since **v1.0.2** this layer ships a **feed-gate**: `SET_ACTIVE_LANE` never arms 
 ## Multicolor / automatic filament change — status
 
 On the reference setup, filament color changes are done **manually**: there is no automatic cutter and no passive respoolers, so a human swaps the filament at the `Tn` pause. A complete automatic pipeline (unload / load / resume orchestration) was prototyped and did work, but it is **not shipped** in this repo. Full, honest breakdown of what works, what was prototyped and what is missing: **[docs/MULTICOLOR_STATUS.en.md](docs/MULTICOLOR_STATUS.en.md)** (English) · **[docs/MULTICOLOR_STATUS.fr.md](docs/MULTICOLOR_STATUS.fr.md)** (French).
+
+## Experimental: candidate firmware with the driver rewrite (fix #10 + #11)
+
+The **[experimental/fix10-fix11/](experimental/fix10-fix11/README.md)** folder holds the next firmware step: the driver configuration is rewritten before every motor start, which closes the "driver settings lost after a 24 V interruption" limitation described above. The host protocol is unchanged, so `lll_buffer.py` stays as it is. These fixes have been running since October 2026 on three boards, but inside a different version of this firmware, made for a splitter project tied to the LLL that changes filament automatically, a bit like an AMS (not published). **The build offered here has not been flashed on a board yet**, which is why it sits in `experimental/` and the official binary is still the fix #9 one. What is tested, what is not, and how to try it: [experimental/fix10-fix11/README.md](experimental/fix10-fix11/README.md).
 
 ## Experimental: Phase C (v1.1) — informational only
 

@@ -1,5 +1,47 @@
 # Changelog
 
+## v1.2.0-rc1 — candidate firmware: driver configuration rewritten before every motor start — 2026-11-20
+
+**Candidate, not the official firmware.** The official binary is still
+`build/klipper_canonical_v1_fix9.bin`; `src/buffer.c` is unchanged. The candidate lives in
+[`experimental/fix10-fix11/`](experimental/fix10-fix11/README.md). (The v1.1 label was used by
+the withdrawn Phase C experiment, hence v1.2.)
+
+### The problem
+- The TMC2225 is powered from the 24 V, the MCU stays alive on USB, and the firmware writes
+  the driver configuration only once after boot. After a 24 V interruption with USB still
+  connected (or USB connected before the 24 V), the driver runs on its power-on settings:
+  slow motor, no torque, higher current, 24 V supply possibly in current limit. Until now the
+  only remedy was a `FIRMWARE_RESTART`. Now documented in the README, *Known behaviour &
+  limitations*.
+
+### Candidate firmware (`experimental/fix10-fix11/`)
+- **Fix #10**: the complete driver configuration (CHOPCONF, IHOLD_IRUN, PWMCONF, TPOWERDOWN,
+  GCONF) is written again before every motor start; the driver is enabled only after that.
+- **Fix #11**: those writes are spread over the firmware task, one per turn, so that no turn
+  holds the main loop (and USB) for more than about 10 ms. In one block the rewrite would hold
+  it for 60–70 ms, beyond the 25 ms after which the Klipper host retransmits.
+- Host protocol unchanged (identical command/response dictionary): `lll_buffer.py` as is.
+- Behaviour differences: the motor starts about 60 ms after the request (about 20 ms in v1);
+  a button / mainboard-signal / `parked` / semi-auto request shorter than the arming (about
+  50 ms) produces no movement.
+- Prebuilt binary: 54 280 bytes, Klipper `v0.13.0-700` (commit `d6ea62542`), sha256
+  `d3f45c26b584d16c98c76ed67eb77fa9059784caade0b200439eb3deb29dcf5e`.
+
+### What is tested, and what is not
+- **Tested in a different firmware**: both fixes have been running since October 2026 on three
+  boards, inside a different version of this firmware made for a splitter project tied to the
+  LLL, which changes filament automatically, a bit like an AMS (not published). The problem
+  has not come back there; the dedicated test (cutting the 24 V on purpose and measuring the
+  speed) was never run.
+- **This exact build has not been flashed on a board.** It compiles without warnings, and
+  rebuilding the unchanged v1 source in the same tree gives the published binary back except
+  for the 23 bytes of the build timestamp.
+- Buttons, `parked` role and semi-auto mode were never exercised with fix #11 (the other
+  firmware does not use them).
+
+Related discussion: Nitrooxyde/Mellow-LLL-Plus-Klipper-Firmware#1.
+
 ## v1.0.4 — `lll_buffer.py` loads on Kalico and on older Klipper hosts — 2026-11-20
 
 Host-side only (Klipper extra `lll_buffer.py`): **no firmware rebuild or flash needed** — keep running the v1.0.0 binary.
